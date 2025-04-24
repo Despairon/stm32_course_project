@@ -1,0 +1,8 @@
+*.o
+*.d
+*.su
+*.cyclo
+*.elf
+*.bin
+Debug
+Release

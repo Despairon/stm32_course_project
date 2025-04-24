@@ -21,19 +21,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdbool.h>
+#include <led/inc/led.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
-typedef enum pwm_led_mode_e
-{
-  PWM_LED_MODE_1X = 1,
-  PWM_LED_MODE_2X,
-  PWM_LED_MODE_3X,
-  PWM_LED_MODE_LAST
-} pwm_led_mode_t;
 
 /* USER CODE END PTD */
 
@@ -67,8 +60,6 @@ DMA_HandleTypeDef hdma_usart6_tx;
 
 /* USER CODE BEGIN PV */
 
-static pwm_led_mode_t pwm_led_mode = PWM_LED_MODE_1X;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,13 +76,6 @@ static void MX_USART6_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  UNUSED(htim);
-
-  TIM1->CCR1 = TIM1->CCR1 < TIM1->ARR ? TIM1->CCR1 + (uint32_t)pwm_led_mode : 0;
-}
 
 static void uart_rx_complete(UART_HandleTypeDef *huart)
 {
@@ -135,11 +119,6 @@ int main(void)
   MX_I2C1_Init();
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim1);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  TIM1->CCR1 = 0;
-
-  static bool button_pressed = false;
 
   const uint8_t spi_data_to_send_list[][MAX7219_DATA_SIZE] =
   {
@@ -167,6 +146,12 @@ int main(void)
   };
   const size_t spi_data_to_send_list_size = sizeof(spi_data_to_send_list) / sizeof(spi_data_to_send_list[0]);
 
+  HAL_StatusTypeDef result = led_init(&htim1, GPIOA, GPIO_PIN_0);
+  if (result != HAL_OK)
+  {
+    // TODO: error handling
+  }
+
   // HAL_UART_RegisterCallback(&huart6, HAL_UART_RX_COMPLETE_CB_ID, &uart_rx_complete);
 
   // uint8_t data_rx[32] = {0};
@@ -185,43 +170,23 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // if ((GPIOA->IDR & 0x1) == GPIO_PIN_RESET)
-    // {
-    //   if (!button_pressed)
-    //   {
-    //     pwm_led_mode++;
+    led_tick();
 
-    //     if (pwm_led_mode == PWM_LED_MODE_LAST)
-    //       pwm_led_mode = PWM_LED_MODE_1X;
-
-    //     button_pressed = true;
-    //     HAL_Delay(20);
-    //   }
-    // }
-    // else
-    // {
-    //   if (button_pressed)
-    //   {
-    //     button_pressed = false;
-    //     HAL_Delay(20);
-    //   }
-    // }
-
-    // const uint8_t *data = spi_data_to_send_list[0];
-    // do
-    // {
-    //   HAL_GPIO_WritePin(GPIOA, 4, GPIO_PIN_RESET);
-    //   HAL_Delay(10);
-    //   HAL_StatusTypeDef result = HAL_SPI_Transmit(&hspi1, (const uint8_t*)data, (uint16_t)MAX7219_DATA_SIZE, 1000);
-    //   if (result != HAL_OK)
-    //   {
-    //     // TODO: error handling
-    //   }
-    //   HAL_Delay(10);
-    //   HAL_GPIO_WritePin(GPIOA, 4, GPIO_PIN_SET);
-    //   data += sizeof(spi_data_to_send_list[0]);
-    // }
-    // while (data != spi_data_to_send_list[spi_data_to_send_list_size]);
+    const uint8_t *data = spi_data_to_send_list[0];
+    do
+    {
+      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+      HAL_Delay(10);
+      HAL_StatusTypeDef result = HAL_SPI_Transmit(&hspi1, (const uint8_t*)data, (uint16_t)MAX7219_DATA_SIZE, 1000);
+      if (result != HAL_OK)
+      {
+        // TODO: error handling
+      }
+      HAL_Delay(10);
+      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+      data += sizeof(spi_data_to_send_list[0]);
+    }
+    while (data != spi_data_to_send_list[spi_data_to_send_list_size]);
 
     HAL_StatusTypeDef result = HAL_I2C_IsDeviceReady(&hi2c1, LSM6DS3_I2C_ADDRESS, 10, 1000);
     if (result != HAL_OK)
@@ -451,6 +416,7 @@ static void MX_TIM1_Init(void)
   /* USER CODE BEGIN TIM1_Init 2 */
 
   /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
 
 }
 
