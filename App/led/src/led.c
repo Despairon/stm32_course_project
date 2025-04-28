@@ -1,5 +1,7 @@
 #include <led/inc/led.h>
 #include <stdbool.h>
+#include <FreeRTOS.h>
+#include <task.h>
 
 #define BUTTON_PIN_INVALID_NUMBER ((uint16_t)-1)
 
@@ -11,6 +13,7 @@ typedef enum pwm_led_mode_e
   PWM_LED_MODE_LAST
 } pwm_led_mode_t;
 
+static void led_task(void *arg);
 static void led_pwm_tim_period_elapsed_cb(TIM_HandleTypeDef *htim);
 
 static pwm_led_mode_t pwm_led_mode = PWM_LED_MODE_1X;
@@ -42,30 +45,35 @@ HAL_StatusTypeDef led_init(TIM_HandleTypeDef *pwm_tim_handle, GPIO_TypeDef *butt
         HAL_TIM_PWM_Start(pwm_tim_handle, TIM_CHANNEL_1);
     
         pwm_tim_handle->Instance->CCR1 = 0;
+
+        (void)xTaskCreate(&led_task, "led_task", 128, NULL, tskIDLE_PRIORITY, NULL);
     }
     while (false);
 
     return result;
 }
 
-void led_update()
+void led_task(void *arg)
 {
-    if (!_button_gpio_port || (_button_pin == BUTTON_PIN_INVALID_NUMBER))
-        return;
-    
-    GPIO_PinState button_new_state = HAL_GPIO_ReadPin(_button_gpio_port, _button_pin);
-    if (button_state != button_new_state)
+    while (true)
     {
-        if (button_new_state == GPIO_PIN_RESET)
+        if (!_button_gpio_port || (_button_pin == BUTTON_PIN_INVALID_NUMBER))
+            return;
+
+        GPIO_PinState button_new_state = HAL_GPIO_ReadPin(_button_gpio_port, _button_pin);
+        if (button_state != button_new_state)
         {
-            ++pwm_led_mode;
-            if (pwm_led_mode == PWM_LED_MODE_LAST)
-                pwm_led_mode = PWM_LED_MODE_1X;
+            if (button_new_state == GPIO_PIN_RESET)
+            {
+                ++pwm_led_mode;
+                if (pwm_led_mode == PWM_LED_MODE_LAST)
+                    pwm_led_mode = PWM_LED_MODE_1X;
+            }
+
+            button_state = button_new_state;
+
+            vTaskDelay(pdMS_TO_TICKS(20));
         }
-
-        button_state = button_new_state;
-
-        // HAL_Delay(20); // debounce TODO: don't do blocking delay, do a soft timer
     }
 }
 

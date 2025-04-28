@@ -9,16 +9,17 @@
 typedef enum max7219_led_matrix_segment_e
 {
     MAX7219_LED_MATRIX_NO_SEGMENT = 0,
-    MAX7219_LED_MATRIX_SEGMENT_G  = 1,
-    MAX7219_LED_MATRIX_SEGMENT_F  = 1 << 1,
-    MAX7219_LED_MATRIX_SEGMENT_E  = 1 << 2,
-    MAX7219_LED_MATRIX_SEGMENT_D  = 1 << 3,
-    MAX7219_LED_MATRIX_SEGMENT_C  = 1 << 4,
-    MAX7219_LED_MATRIX_SEGMENT_B  = 1 << 5,
-    MAX7219_LED_MATRIX_SEGMENT_A  = 1 << 6,
+    MAX7219_LED_MATRIX_SEGMENT_G = 1,
+    MAX7219_LED_MATRIX_SEGMENT_F = 1 << 1,
+    MAX7219_LED_MATRIX_SEGMENT_E = 1 << 2,
+    MAX7219_LED_MATRIX_SEGMENT_D = 1 << 3,
+    MAX7219_LED_MATRIX_SEGMENT_C = 1 << 4,
+    MAX7219_LED_MATRIX_SEGMENT_B = 1 << 5,
+    MAX7219_LED_MATRIX_SEGMENT_A = 1 << 6,
     MAX7219_LED_MATRIX_SEGMENT_DP = 1 << 7
 } max7219_led_matrix_segment_t;
 
+// TODO: add more interface functions, e.g. draw point, clear point, turn leds on/off, etc..
 extern HAL_StatusTypeDef led_matrix_init(SPI_HandleTypeDef *spi_handle, GPIO_TypeDef *cs_gpio_port, uint16_t cs_pin);
 extern HAL_StatusTypeDef led_matrix_clear();
 extern HAL_StatusTypeDef led_matrix_draw_bitmap(uint8_t bitmap[MAX_7219_LED_MATRIX_SIZE]);

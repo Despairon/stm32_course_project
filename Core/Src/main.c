@@ -88,18 +88,6 @@ void StartDefaultTask(void *argument);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-static void uart_rx_complete(UART_HandleTypeDef *huart)
-{
-  const uint8_t data_tx[] = "Received 32 bytes!\r\n";
-  HAL_UART_Transmit(&huart6, data_tx, (uint16_t)sizeof(data_tx), 100);
-}
-
-static void blink_task(void *argument)
-{
-  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-  osDelay(1000);
-}
-
 /* USER CODE END 0 */
 
 /**
@@ -151,16 +139,17 @@ int main(void)
 
   const uint8_t test_bitmap[MAX_7219_LED_MATRIX_SIZE] =
   {
-    0b00111000,
-    0b01111100,
-    0b01111110,
-    0b00111111,
-    0b00111111,
+    0b00000000,
+    0b01100110,
+    0b11111111,
+    0b11111111,
+    0b11111111,
     0b01111110,
     0b01111100,
     0b00111000
   };
-  result = led_matrix_draw_bitmap(test_bitmap);
+
+  result = led_matrix_draw_bitmap((uint8_t*)test_bitmap);
   if (result != HAL_OK)
   {
     // TODO: error handling
@@ -201,7 +190,7 @@ int main(void)
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  xTaskCreate(&blink_task, "blink_task", 128, NULL, tskIDLE_PRIORITY, NULL);
+
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -220,7 +209,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    led_update(); // TODO: move out of here, use rtos 
 
     // TODO: finish LSM6DS3 implementation using rtos, move out of here
     HAL_StatusTypeDef result = HAL_I2C_IsDeviceReady(&hi2c1, LSM6DS3_I2C_ADDRESS, 10, 1000);
@@ -469,7 +457,7 @@ static void MX_USART6_UART_Init(void)
 
   /* USER CODE END USART6_Init 1 */
   huart6.Instance = USART6;
-  huart6.Init.BaudRate = 38400;
+  huart6.Init.BaudRate = 57600;
   huart6.Init.WordLength = UART_WORDLENGTH_8B;
   huart6.Init.StopBits = UART_STOPBITS_1;
   huart6.Init.Parity = UART_PARITY_NONE;
@@ -515,23 +503,12 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-
-  /*Configure GPIO pin : PC13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA0 */
   GPIO_InitStruct.Pin = GPIO_PIN_0;

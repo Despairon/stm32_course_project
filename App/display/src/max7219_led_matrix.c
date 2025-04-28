@@ -151,7 +151,13 @@ HAL_StatusTypeDef led_matrix_draw_bitmap(uint8_t bitmap[MAX_7219_LED_MATRIX_SIZE
             size_t i = 0;
             for (; i < MAX_7219_LED_MATRIX_SIZE; i++)
             {
-                result = max7219_spi_send(MAX7219_REG_ADDR_DIGIT_0 + i, bitmap[i]); // TODO: rotate bitmap in order to send proper bitmap, or find some other way
+                uint8_t segment_data = 0;
+
+                size_t j = 0;
+                for (; j < MAX_7219_LED_MATRIX_SIZE; j++)
+                    segment_data |= ((bitmap[j] >> i) & 1) << (MAX_7219_LED_MATRIX_SIZE-j-1);
+
+                result = max7219_spi_send(MAX7219_REG_ADDR_DIGIT_0 + i, segment_data);
                 if (result != HAL_OK)
                     break;
             }
