@@ -1,9 +1,11 @@
-#include <led/inc/led.h>
+#include <led/inc/app_led.h>
 #include <stdbool.h>
 #include <FreeRTOS.h>
 #include <task.h>
 
+#define APP_LED_TASK_NAME "led_task"
 #define BUTTON_PIN_INVALID_NUMBER ((uint16_t)-1)
+#define APP_LED_DEFAULT_DELAY 20U
 
 typedef enum pwm_led_mode_e
 {
@@ -21,7 +23,7 @@ static GPIO_PinState button_state = GPIO_PIN_RESET;
 static GPIO_TypeDef *_button_gpio_port = NULL;
 static uint16_t _button_pin = BUTTON_PIN_INVALID_NUMBER;
 
-HAL_StatusTypeDef led_init(TIM_HandleTypeDef *pwm_tim_handle, GPIO_TypeDef *button_gpio_port, uint16_t button_pin)
+HAL_StatusTypeDef app_led_init(TIM_HandleTypeDef *pwm_tim_handle, GPIO_TypeDef *button_gpio_port, uint16_t button_pin)
 {
     HAL_StatusTypeDef result = HAL_OK;
 
@@ -46,19 +48,24 @@ HAL_StatusTypeDef led_init(TIM_HandleTypeDef *pwm_tim_handle, GPIO_TypeDef *butt
     
         pwm_tim_handle->Instance->CCR1 = 0;
 
-        (void)xTaskCreate(&led_task, "led_task", 128, NULL, tskIDLE_PRIORITY, NULL);
+        (void)xTaskCreate(&led_task, APP_LED_TASK_NAME, 128, NULL, tskIDLE_PRIORITY, NULL);
     }
     while (false);
 
     return result;
 }
 
-void led_task(void *arg)
+static void led_task(void *arg)
 {
+    UNUSED(arg);
+
     while (true)
     {
         if (!_button_gpio_port || (_button_pin == BUTTON_PIN_INVALID_NUMBER))
-            return;
+        {
+            vTaskDelay(pdMS_TO_TICKS(APP_LED_DEFAULT_DELAY));
+            continue;
+        }
 
         GPIO_PinState button_new_state = HAL_GPIO_ReadPin(_button_gpio_port, _button_pin);
         if (button_state != button_new_state)
@@ -72,7 +79,7 @@ void led_task(void *arg)
 
             button_state = button_new_state;
 
-            vTaskDelay(pdMS_TO_TICKS(20));
+            vTaskDelay(pdMS_TO_TICKS(APP_LED_DEFAULT_DELAY));
         }
     }
 }

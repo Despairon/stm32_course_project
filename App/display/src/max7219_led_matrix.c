@@ -95,7 +95,7 @@ static inline HAL_StatusTypeDef is_led_matrix_initialized()
     return (_spi_handle && _cs_gpio_port && (_cs_pin != CS_PIN_INVALID_VALUE)) ? HAL_OK : HAL_ERROR;
 }
 
-HAL_StatusTypeDef led_matrix_init(SPI_HandleTypeDef *spi_handle, GPIO_TypeDef *cs_gpio_port, uint16_t cs_pin)
+HAL_StatusTypeDef app_led_matrix_init(SPI_HandleTypeDef *spi_handle, GPIO_TypeDef *cs_gpio_port, uint16_t cs_pin)
 {
     HAL_StatusTypeDef result = HAL_OK;
 
@@ -132,20 +132,20 @@ HAL_StatusTypeDef led_matrix_init(SPI_HandleTypeDef *spi_handle, GPIO_TypeDef *c
         if (result != HAL_OK)
             break;
 
-        result = led_matrix_clear();
+        result = app_led_matrix_clear();
     }
     while (false);
 
     return result;
 }
 
-HAL_StatusTypeDef led_matrix_draw_bitmap(uint8_t bitmap[MAX_7219_LED_MATRIX_SIZE])
+HAL_StatusTypeDef app_led_matrix_draw_bitmap(uint8_t bitmap[MAX_7219_LED_MATRIX_SIZE])
 {
     HAL_StatusTypeDef result = is_led_matrix_initialized();
 
     if (result == HAL_OK)
     {
-        result = led_matrix_clear();
+        result = app_led_matrix_clear();
         if (result == HAL_OK)
         {
             size_t i = 0;
@@ -167,7 +167,7 @@ HAL_StatusTypeDef led_matrix_draw_bitmap(uint8_t bitmap[MAX_7219_LED_MATRIX_SIZE
     return result;
 }
 
-HAL_StatusTypeDef led_matrix_clear()
+HAL_StatusTypeDef app_led_matrix_clear()
 {
     HAL_StatusTypeDef result = is_led_matrix_initialized();
 
