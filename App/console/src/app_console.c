@@ -18,7 +18,7 @@ static void console_task(void *arg);
 static void printf_task(void *arg);
 static void scanf_task(void *arg);
 
-// static void uart_rx_tx_complete_cb(UART_HandleTypeDef *huart);
+static void uart_tx_complete_cb(UART_HandleTypeDef *huart);
 
 static UART_HandleTypeDef *uart_handle = NULL;
 static QueueHandle_t uart_sema = NULL;
@@ -36,7 +36,7 @@ struct task_printf_queue_ll_s
 
 static inline HAL_StatusTypeDef is_uart_initialized()
 {
-    return (uart_handle && uart_sema) ? HAL_OK : HAL_ERROR;
+    return (uart_handle && uart_sema && rx_queue) ? HAL_OK : HAL_ERROR;
 }
 
 HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle)
@@ -59,6 +59,9 @@ HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle)
             break;
 
         if ((rx_queue = xQueueCreate(APP_CONSOLE_UART_BUFFER_SIZE, 1UL)) == NULL)
+            break;
+
+        if (HAL_UART_RegisterCallback(uart_handle, HAL_UART_TX_COMPLETE_CB_ID, &uart_tx_complete_cb) != HAL_OK)
             break;
 
         if (xTaskCreate(&console_task, APP_CONSOLE_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE*4, NULL, APP_CONSOLE_TASK_PRIORITY, &console_task_handle) != pdTRUE)
@@ -120,8 +123,9 @@ static void console_task(void *arg)
             // this code section is for debug
 
             printf("Hello from app_console task! [0]\r\n");
-            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS*2));
+            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
             printf("Hello from app_console task! [1]\r\n");
+            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
             // printf("Enter some text: ");
             // char strbuf[64] = {0};
             // scanf("%s", strbuf);
@@ -135,7 +139,7 @@ static void console_task(void *arg)
             // scanf("%c", &c);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
+        //vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
 
         // TODO: finish implementation
     }
@@ -154,22 +158,33 @@ static void printf_task(void *arg)
         }
 
         struct task_printf_queue_ll_s *curr_item = task_printf_queue_linked_list;
-        // TODO: Make use of DMA
+
         while (curr_item)
         {
-            UBaseType_t queue_items = uxQueueMessagesWaiting(curr_item->tx_queue);
-            while(queue_items--)
+            UBaseType_t chars_to_send = uxQueueMessagesWaiting(curr_item->tx_queue);
+
+            if (chars_to_send)
             {
-                uint8_t ch = 0;
-                if (xQueueReceive(curr_item->tx_queue, (void *const)&ch, 1) == pdPASS)
+                uint8_t *buf = pvPortMalloc(chars_to_send);
+
+                if (buf)
                 {
+                    UBaseType_t i = 0;
+                    for (; i < chars_to_send; i++)
+                        if (xQueueReceive(curr_item->tx_queue, (void *const)&(buf[i]), 1) != pdPASS)
+                            buf[i] = '\0';
+
                     while (xSemaphoreTake(uart_sema, portMAX_DELAY) != pdPASS);
 
-                    while (HAL_UART_Transmit(uart_handle, (uint8_t*)&ch, 1, HAL_MAX_DELAY) != HAL_OK);
+                    if (HAL_UART_Transmit_DMA(uart_handle, (const uint8_t*)buf, (uint16_t)chars_to_send) != HAL_OK)
+                        (void)xSemaphoreGive(uart_sema);
 
-                    (void)xSemaphoreGive(uart_sema);
+                    while (!ulTaskNotifyTake(pdTRUE, portMAX_DELAY));
+
+                    vPortFree(buf);
                 }
             }
+
             curr_item = curr_item->next;
         }
 
@@ -191,6 +206,14 @@ static void scanf_task(void *arg)
 
         // TODO: Take the uart semaphore and receive 1 char DMA. Give the semaphore in uart complete interrupt. Put the received char (if any) to rx_queue. If no chars received - sleep.
     }
+}
+
+static void uart_tx_complete_cb(UART_HandleTypeDef *huart)
+{
+    UNUSED(huart);
+
+    (void)xSemaphoreGiveFromISR(uart_sema, NULL);
+    vTaskNotifyGiveFromISR(printf_task_handle, NULL);
 }
 
 int __io_putchar(int ch)

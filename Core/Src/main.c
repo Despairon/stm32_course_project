@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
+#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -59,6 +60,7 @@ SPI_HandleTypeDef hspi1;
 TIM_HandleTypeDef htim1;
 
 UART_HandleTypeDef huart6;
+DMA_HandleTypeDef hdma_usart6_tx;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -74,6 +76,7 @@ const osThreadAttr_t defaultTask_attributes = {
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C1_Init(void);
@@ -117,6 +120,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM1_Init();
   MX_SPI1_Init();
   MX_I2C1_Init();
@@ -479,6 +483,22 @@ static void MX_USART6_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -534,9 +554,9 @@ void StartDefaultTask(void *argument)
   for(;;)
   {
     printf("Hello from default task! [0]\r\n");
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(1000));
     printf("Hello from default task! [1]\r\n");
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
   /* USER CODE END 5 */
 }
