@@ -553,9 +553,10 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    printf("Hello from default task! [0]\r\n");
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    printf("Hello from default task! [1]\r\n");
+    // printf("Hello from default task! [0]\r\n");
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+    // printf("Hello from default task! [1]\r\n");
+    // vTaskDelay(pdMS_TO_TICKS(1000));
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
   /* USER CODE END 5 */

@@ -7,10 +7,14 @@
 #include <stdio.h>
 
 #define APP_CONSOLE_TASK_NAME "console_task"
+#define APP_CONSOLE_PRINTF_TASK_NAME "printf_task"
+#define APP_CONSOLE_SCANF_TASK_NAME "scanf_task"
 #define APP_CONSOLE_DEFAULT_TIMEOUT_MS 1000U
 #define APP_CONSOLE_DEFAULT_DELAY_MS 10U
 #define APP_CONSOLE_PRINTF_PERIOD_MS (APP_CONSOLE_DEFAULT_DELAY_MS*5)
 #define APP_CONSOLE_TASK_PRIORITY 16UL
+#define APP_CONSOLE_PRINTF_TASK_PRIORITY APP_CONSOLE_TASK_PRIORITY
+#define APP_CONSOLE_SCANF_TASK_PRIORITY 8UL
 #define APP_CONSOLE_UART_BUFFER_SIZE 128UL
 #define APP_CONSOLE_TASK_STASK_SIZE 128U
 
@@ -67,10 +71,10 @@ HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle)
         if (xTaskCreate(&console_task, APP_CONSOLE_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE*4, NULL, APP_CONSOLE_TASK_PRIORITY, &console_task_handle) != pdTRUE)
             break;
 
-        if (xTaskCreate(&printf_task, APP_CONSOLE_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_TASK_PRIORITY, &printf_task_handle) != pdTRUE)
+        if (xTaskCreate(&printf_task, APP_CONSOLE_PRINTF_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_PRINTF_TASK_PRIORITY, &printf_task_handle) != pdTRUE)
             break;
 
-        if (xTaskCreate(&scanf_task, APP_CONSOLE_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_TASK_PRIORITY, &scanf_task_handle) != pdTRUE)
+        if (xTaskCreate(&scanf_task, APP_CONSOLE_SCANF_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_SCANF_TASK_PRIORITY, &scanf_task_handle) != pdTRUE)
             break;
 
         (void)setvbuf(stdout, NULL, _IONBF, 0); // needed for printf to work properly
@@ -126,20 +130,20 @@ static void console_task(void *arg)
             vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
             printf("Hello from app_console task! [1]\r\n");
             vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
-            // printf("Enter some text: ");
-            // char strbuf[64] = {0};
-            // scanf("%s", strbuf);
-            // printf("\r\nYou entered: %s\r\n", strbuf);
-            // printf("Now enter some nomber: ");
-            // int i = 0;
-            // scanf("%d", &i);
-            // printf("\r\nYou entered: %d\r\n", i);
-            // vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
-            // printf("\r\nWell done!!! Wanna try again? (y/n): ");
-            // scanf("%c", &c);
+            printf("Enter some text: ");
+            char strbuf[64] = {0};
+            scanf("%s", strbuf);
+            printf("\r\nYou entered: %s\r\n", strbuf);
+            printf("Now enter some nomber: ");
+            int i = 0;
+            scanf("%d", &i);
+            printf("\r\nYou entered: %d\r\n", i);
+            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
+            printf("\r\nWell done!!! Wanna try again? (y/n): ");
+            scanf("%c", &c);
         }
 
-        //vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
+        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
 
         // TODO: finish implementation
     }
@@ -171,7 +175,7 @@ static void printf_task(void *arg)
                 {
                     UBaseType_t i = 0;
                     for (; i < chars_to_send; i++)
-                        if (xQueueReceive(curr_item->tx_queue, (void *const)&(buf[i]), 1) != pdPASS)
+                        if (xQueueReceive(curr_item->tx_queue, (void *const)&(buf[i]), pdMS_TO_TICKS(1)) != pdPASS)
                             buf[i] = '\0';
 
                     while (xSemaphoreTake(uart_sema, portMAX_DELAY) != pdPASS);
@@ -196,6 +200,8 @@ static void scanf_task(void *arg)
 {
     UNUSED(arg);
 
+    uint8_t ch;
+
     while (true)
     {
         if (is_uart_initialized() != HAL_OK)
@@ -204,7 +210,25 @@ static void scanf_task(void *arg)
             continue;
         }
 
-        // TODO: Take the uart semaphore and receive 1 char DMA. Give the semaphore in uart complete interrupt. Put the received char (if any) to rx_queue. If no chars received - sleep.
+        HAL_StatusTypeDef res = HAL_OK;
+        while (res == HAL_OK)
+        {
+            ch = EOF;
+
+            while (xSemaphoreTake(uart_sema, portMAX_DELAY) != pdPASS);
+
+            if (__HAL_UART_GET_FLAG(uart_handle, UART_FLAG_RXNE) == SET)
+                ch = uart_handle->Instance->DR & (uint8_t)0xFF;
+            else
+                res = HAL_ERROR;
+
+            (void)xSemaphoreGive(uart_sema);
+
+            if ((res == HAL_OK) && (ch != EOF))
+                while (xQueueSendToBack(rx_queue, (const void *const)&ch, portMAX_DELAY) != pdPASS);
+            else
+                taskYIELD();
+        }
     }
 }
 
@@ -260,13 +284,7 @@ int __io_getchar(void)
 {
     uint8_t ch = EOF;
 
-    while (xSemaphoreTake(uart_sema, portMAX_DELAY) != pdPASS);
-
-    while (HAL_UART_Receive(uart_handle, (uint8_t*)&ch, 1, HAL_MAX_DELAY) != HAL_OK);
-
-    (void)xSemaphoreGive(uart_sema);
-
-    // TODO: just get the ch from the rx_queue
+    while (xQueueReceive(rx_queue, (void *const)&ch, portMAX_DELAY) != pdPASS);
 
     return (int)ch;
 }
