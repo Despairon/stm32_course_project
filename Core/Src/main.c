@@ -168,7 +168,7 @@ int main(void)
   // uint8_t data_rx[32] = {0};
   // HAL_UART_Receive_IT(&huart6, data_rx, (uint16_t)sizeof(data_rx));
 
-  // const uint8_t data_tx[] = "Hello world!\r\n";
+  // const uint8_t data_tx[] = "Hello world!\n";
   // HAL_UART_Transmit_DMA(&huart6, data_tx, (uint16_t)sizeof(data_tx));
   // TODO: Get accelerometer/gyro data from the module via IT or DMA
   // TODO: Send accelerometer/gyro data to UART
@@ -553,9 +553,9 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    // printf("Hello from default task! [0]\r\n");
+    // printf("Hello from default task! [0]\n");
     // vTaskDelay(pdMS_TO_TICKS(1000));
-    // printf("Hello from default task! [1]\r\n");
+    // printf("Hello from default task! [1]\n");
     // vTaskDelay(pdMS_TO_TICKS(1000));
     vTaskDelay(pdMS_TO_TICKS(1000));
   }

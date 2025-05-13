@@ -122,28 +122,28 @@ static void console_task(void *arg)
             continue;
         }
 
+        // this code section is for debug
+
         if (c == 'y')
         {
-            // this code section is for debug
-
-            printf("Hello from app_console task! [0]\r\n");
+            printf("Hello from app_console task! [0]\n");
             vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
-            printf("Hello from app_console task! [1]\r\n");
+            printf("Hello from app_console task! [1]\n");
             vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
             printf("Enter some text: ");
             char strbuf[64] = {0};
             scanf("%s", strbuf);
-            printf("\r\nYou entered: %s\r\n", strbuf);
+            printf("\nYou entered: %s\n", strbuf);
             printf("Now enter some nomber: ");
             int i = 0;
             scanf("%d", &i);
-            printf("\r\nYou entered: %d\r\n", i);
-            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
-            printf("\r\nWell done!!! Wanna try again? (y/n): ");
-            scanf("%c", &c);
+            printf("\nYou entered: %d\n", i);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
+        printf("Wanna try again? (y/n): ");
+        while ((c = (char)getchar()) == '\n');
+
+        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
 
         // TODO: finish implementation
     }
@@ -200,8 +200,6 @@ static void scanf_task(void *arg)
 {
     UNUSED(arg);
 
-    uint8_t ch;
-
     while (true)
     {
         if (is_uart_initialized() != HAL_OK)
@@ -213,7 +211,7 @@ static void scanf_task(void *arg)
         HAL_StatusTypeDef res = HAL_OK;
         while (res == HAL_OK)
         {
-            ch = EOF;
+            uint8_t ch = EOF;
 
             while (xSemaphoreTake(uart_sema, portMAX_DELAY) != pdPASS);
 
@@ -284,7 +282,8 @@ int __io_getchar(void)
 {
     uint8_t ch = EOF;
 
-    while (xQueueReceive(rx_queue, (void *const)&ch, portMAX_DELAY) != pdPASS);
+    while (xQueueReceive(rx_queue, (void *const)&ch, pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS)) != pdPASS)
+        taskYIELD();
 
     return (int)ch;
 }
