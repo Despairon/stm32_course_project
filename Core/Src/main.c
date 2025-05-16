@@ -127,7 +127,7 @@ int main(void)
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_StatusTypeDef result = app_led_init(&htim1, GPIOA, GPIO_PIN_0);
+  HAL_StatusTypeDef result = app_led_init(&htim1);
   if (result != HAL_OK)
   {
     // TODO: error handling

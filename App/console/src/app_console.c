@@ -1,4 +1,5 @@
 #include <console/inc/app_console.h>
+#include <console/inc/app_console_fsm.h>
 #include <FreeRTOS.h>
 #include <task.h>
 #include <semphr.h>
@@ -11,7 +12,7 @@
 #define APP_CONSOLE_SCANF_TASK_NAME "scanf_task"
 #define APP_CONSOLE_DEFAULT_TIMEOUT_MS 1000U
 #define APP_CONSOLE_DEFAULT_DELAY_MS 10U
-#define APP_CONSOLE_PRINTF_PERIOD_MS (APP_CONSOLE_DEFAULT_DELAY_MS*5)
+#define APP_CONSOLE_PRINTF_PERIOD_MS (APP_CONSOLE_DEFAULT_DELAY_MS*2)
 #define APP_CONSOLE_TASK_PRIORITY 16UL
 #define APP_CONSOLE_PRINTF_TASK_PRIORITY APP_CONSOLE_TASK_PRIORITY
 #define APP_CONSOLE_SCANF_TASK_PRIORITY 8UL
@@ -30,6 +31,12 @@ static TaskHandle_t console_task_handle = NULL;
 static TaskHandle_t printf_task_handle = NULL;
 static TaskHandle_t scanf_task_handle = NULL;
 static QueueHandle_t rx_queue = NULL;
+static state_machine_t console_fsm =
+{
+    .current_state = APP_CONSOLE_NO_MENU,
+    .events_count  = APP_CONSOLE_OPTIONS_COUNT,
+    .transitions   = (const fsm_transition_t*)app_console_fsm_transitions
+};
 
 struct task_printf_queue_ll_s
 {
@@ -38,7 +45,7 @@ struct task_printf_queue_ll_s
     struct task_printf_queue_ll_s *next;
 } static *task_printf_queue_linked_list = NULL;
 
-static inline HAL_StatusTypeDef is_uart_initialized()
+static inline HAL_StatusTypeDef _is_uart_initialized()
 {
     return (uart_handle && uart_sema && rx_queue) ? HAL_OK : HAL_ERROR;
 }
@@ -49,7 +56,7 @@ HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle)
 
     do
     {
-        if (!handle || (is_uart_initialized() == HAL_OK))
+        if (!handle || (_is_uart_initialized() == HAL_OK))
             break;
 
         uart_handle = handle;
@@ -112,40 +119,28 @@ static void console_task(void *arg)
 {
     UNUSED(arg);
 
-    char c = 'y';
-
     while (true)
     {
-        if (is_uart_initialized() != HAL_OK)
+        if (_is_uart_initialized() != HAL_OK)
         {
             vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
             continue;
         }
 
-        // this code section is for debug
-
-        if (c == 'y')
+        if (console_fsm.current_state == APP_CONSOLE_NO_MENU)
         {
-            printf("Hello from app_console task! [0]\n");
-            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
-            printf("Hello from app_console task! [1]\n");
-            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
-            printf("Enter some text: ");
-            char strbuf[64] = {0};
-            scanf("%s", strbuf);
-            printf("\nYou entered: %s\n", strbuf);
-            printf("Now enter some nomber: ");
-            int i = 0;
-            scanf("%d", &i);
-            printf("\nYou entered: %d\n", i);
+            (void)fsm_v2_process_event(&console_fsm, APP_CONSOLE_OPTION_0, NULL);
+            continue;
         }
 
-        printf("Wanna try again? (y/n): ");
-        while ((c = (char)getchar()) == '\n');
+        char option;
+        scanf("%c", &option);
 
-        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_TIMEOUT_MS));
+        if ((option >= '0') && (option <= '9')) // TODO: implement character for breaking some monitor functionality (e.g. CTRL-C)
+            if (!fsm_v2_process_event(&console_fsm, (fsm_event_t)(option - '0'), NULL))
+                printf("Option %c is unavailable.\n", option);
 
-        // TODO: finish implementation
+        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
     }
 }
 
@@ -155,7 +150,7 @@ static void printf_task(void *arg)
 
     while (true)
     {
-        if (is_uart_initialized() != HAL_OK)
+        if (_is_uart_initialized() != HAL_OK)
         {
             vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
             continue;
@@ -202,7 +197,7 @@ static void scanf_task(void *arg)
 
     while (true)
     {
-        if (is_uart_initialized() != HAL_OK)
+        if (_is_uart_initialized() != HAL_OK)
         {
             vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
             continue;

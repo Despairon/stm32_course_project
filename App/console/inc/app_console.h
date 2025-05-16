@@ -3,6 +3,8 @@
 
 #include "stm32f4xx_hal.h"
 
-extern HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle);
+#define APP_CONSOLE_VERSION "1.0"
+
+HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle);
 
 #endif

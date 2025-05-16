@@ -1,0 +1,3 @@
+[submodule "App/lib/simple_state_machine"]
+	path = App/lib/simple_state_machine
+	url = https://github.com/Despairon/simple_state_machine.git
