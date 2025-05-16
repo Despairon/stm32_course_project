@@ -10,6 +10,8 @@ static void _fsm_go_to_led_menu(void *event_data);
 static void _fsm_main_menu_cmd_reset(void *event_data);
 static void _fsm_led_menu_get_pwm_mode(void *event_data);
 static void _fsm_led_menu_set_pwm_mode(void *event_data);
+static void _fsm_led_menu_get_brightness(void *event_data);
+static void _fsm_led_menu_set_brightness(void *event_data);
 
 static const char *main_menu_options[] =
 {
@@ -22,8 +24,10 @@ static const char *led_menu_options[] =
 {
     [APP_CONSOLE_OPTION_0] = "LED get mode",
     [APP_CONSOLE_OPTION_1] = "LED set mode",
-    [APP_CONSOLE_OPTION_2] = "Back",
-    [APP_CONSOLE_OPTION_3] = "Main menu"
+    [APP_CONSOLE_OPTION_2] = "LED get brightness",
+    [APP_CONSOLE_OPTION_3] = "LED set brightness",
+    [APP_CONSOLE_OPTION_4] = "Back",
+    [APP_CONSOLE_OPTION_5] = "Main menu"
 };
 static const size_t led_menu_options_count = sizeof(led_menu_options)  / sizeof(led_menu_options[0]);
 
@@ -62,10 +66,10 @@ const fsm_transition_t app_console_fsm_transitions[APP_CONSOLE_MENUS_COUNT][APP_
     {
         [APP_CONSOLE_OPTION_0] = {APP_CONSOLE_LED_MENU,  &_fsm_led_menu_get_pwm_mode},
         [APP_CONSOLE_OPTION_1] = {APP_CONSOLE_LED_MENU,  &_fsm_led_menu_set_pwm_mode},
-        [APP_CONSOLE_OPTION_2] = {APP_CONSOLE_MAIN_MENU, &_fsm_go_to_main_menu},
-        [APP_CONSOLE_OPTION_3] = {APP_CONSOLE_MAIN_MENU, &_fsm_go_to_main_menu},
-        [APP_CONSOLE_OPTION_4] = FSM_NO_TRANSITION,
-        [APP_CONSOLE_OPTION_5] = FSM_NO_TRANSITION,
+        [APP_CONSOLE_OPTION_2] = {APP_CONSOLE_LED_MENU,  &_fsm_led_menu_get_brightness},
+        [APP_CONSOLE_OPTION_3] = {APP_CONSOLE_LED_MENU,  &_fsm_led_menu_set_brightness},
+        [APP_CONSOLE_OPTION_4] = {APP_CONSOLE_MAIN_MENU, &_fsm_go_to_main_menu},
+        [APP_CONSOLE_OPTION_5] = {APP_CONSOLE_MAIN_MENU, &_fsm_go_to_main_menu},
         [APP_CONSOLE_OPTION_6] = FSM_NO_TRANSITION,
         [APP_CONSOLE_OPTION_7] = FSM_NO_TRANSITION,
         [APP_CONSOLE_OPTION_8] = FSM_NO_TRANSITION,
@@ -166,6 +170,31 @@ static void _fsm_led_menu_set_pwm_mode(void *event_data)
     }
     else
         printf("Incorrect mode value entered!\n");
+
+    _propose_options_for_menu(APP_CONSOLE_LED_MENU);
+}
+
+static void _fsm_led_menu_get_brightness(void *event_data)
+{
+    (void)event_data;
+
+    printf("LED brightness is: %d\n", app_led_get_brightness());
+
+    _propose_options_for_menu(APP_CONSOLE_LED_MENU);
+}
+
+static void _fsm_led_menu_set_brightness(void *event_data)
+{
+    (void)event_data;
+
+    printf("Enter LED brightness (0-255): \n");
+
+    int brightness = _get_int_from_stdin();
+
+    if ((brightness >= 0) && (brightness <= APP_LED_BRIGHTNESS_MAX))
+        app_led_set_brightness((uint8_t)brightness);
+    else
+        printf("Incorrect brightness level entered: %d, expected to be in range: 0 - 255.\n", brightness);
 
     _propose_options_for_menu(APP_CONSOLE_LED_MENU);
 }
