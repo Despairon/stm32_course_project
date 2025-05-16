@@ -3,6 +3,8 @@
 #include <led/inc/app_led.h>
 #include <stdio.h>
 
+#define APP_CONSOLE_STDIN_BUF_SIZE 16U
+
 static void _fsm_go_to_main_menu(void *event_data);
 static void _fsm_go_to_led_menu(void *event_data);
 static void _fsm_main_menu_cmd_reset(void *event_data);
@@ -45,8 +47,8 @@ const fsm_transition_t app_console_fsm_transitions[APP_CONSOLE_MENUS_COUNT][APP_
     },
     [APP_CONSOLE_MAIN_MENU] =
     {
-        [APP_CONSOLE_OPTION_0] = {APP_CONSOLE_NO_MENU,  &_fsm_main_menu_cmd_reset},
-        [APP_CONSOLE_OPTION_1] = {APP_CONSOLE_LED_MENU, &_fsm_go_to_led_menu},
+        [APP_CONSOLE_OPTION_0] = {APP_CONSOLE_MAIN_MENU, &_fsm_main_menu_cmd_reset},
+        [APP_CONSOLE_OPTION_1] = {APP_CONSOLE_LED_MENU,  &_fsm_go_to_led_menu},
         [APP_CONSOLE_OPTION_2] = FSM_NO_TRANSITION,
         [APP_CONSOLE_OPTION_3] = FSM_NO_TRANSITION,
         [APP_CONSOLE_OPTION_4] = FSM_NO_TRANSITION,
@@ -87,6 +89,23 @@ static void _propose_options_for_menu(app_console_menu_t menu)
     }
 }
 
+static inline char *_get_line_from_stdin(char *buf, int size)
+{
+    return fgets(buf, size, stdin);
+}
+
+static int _get_int_from_stdin()
+{
+    int ret = EOF;
+
+    char buf[APP_CONSOLE_STDIN_BUF_SIZE*2] = {0};
+
+    if (_get_line_from_stdin(buf, sizeof(buf)))
+        sscanf(buf, "%d\n", &ret);
+
+    return ret;
+}
+
 static void _fsm_go_to_main_menu(void *event_data)
 {
     (void)event_data;
@@ -107,7 +126,7 @@ static void _fsm_main_menu_cmd_reset(void *event_data)
 {
     (void)event_data;
 
-    // TODO: implement _fsm_main_menu_cmd_reset
+    HAL_NVIC_SystemReset();
 }
 
 static void _fsm_led_menu_get_pwm_mode(void *event_data)
@@ -115,7 +134,7 @@ static void _fsm_led_menu_get_pwm_mode(void *event_data)
     (void)event_data;
 
     app_led_pwm_mode_t led_pwm_mode = app_led_get_pwm_mode();
-    printf("LED PWM mode is: %s(%d)\n", app_led_pwm_mode_to_str(led_pwm_mode), led_pwm_mode);
+    printf("LED PWM mode is: %s (%d)\n", app_led_pwm_mode_to_str(led_pwm_mode), led_pwm_mode);
 
     _propose_options_for_menu(APP_CONSOLE_LED_MENU);
 }
@@ -126,21 +145,27 @@ static void _fsm_led_menu_set_pwm_mode(void *event_data)
 
     printf("PWM LED modes:\n");
 
-    app_led_pwm_mode_t mode = PWM_LED_MODE_FIRST;
-    for (; mode <= PWM_LED_MODE_LAST; mode++)
+    app_led_pwm_mode_t mode = APP_LED_PWM_MODE_FIRST;
+    for (; mode <= APP_LED_PWM_MODE_LAST; mode++)
         printf("%d - %s\n", mode, app_led_pwm_mode_to_str(mode));
 
-    printf("Please enter mode number(%d - %d):\n", PWM_LED_MODE_FIRST, PWM_LED_MODE_LAST);
+    printf("Please enter mode number(%d - %d):\n", APP_LED_PWM_MODE_FIRST, APP_LED_PWM_MODE_LAST);
 
-    scanf("%d\n", (int*)&mode);
-
-    if ((mode >= PWM_LED_MODE_FIRST) && (mode <= PWM_LED_MODE_LAST))
+    mode = (app_led_pwm_mode_t)_get_int_from_stdin();
+    if (mode >= 0)
     {
-        if (!app_led_set_pwm_mode(mode))
-            printf("Error setting LED PWM mode!\n");
+        if ((mode >= APP_LED_PWM_MODE_FIRST) && (mode <= APP_LED_PWM_MODE_LAST))
+        {
+            if (!app_led_set_pwm_mode(mode))
+                printf("Error setting LED PWM mode!\n");
+        }
+        else
+        {
+            printf("Wrong LED PWM mode entered: %d, required to be in range from %d to %d\n", mode, APP_LED_PWM_MODE_FIRST, APP_LED_PWM_MODE_LAST);
+        }
     }
     else
-        printf("Wrong LED PWM mode entered: %d, required to be in range from %d to %d", mode, PWM_LED_MODE_FIRST, PWM_LED_MODE_LAST);
+        printf("Incorrect mode value entered!\n");
 
     _propose_options_for_menu(APP_CONSOLE_LED_MENU);
 }

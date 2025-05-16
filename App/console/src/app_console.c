@@ -8,28 +8,36 @@
 #include <stdio.h>
 
 #define APP_CONSOLE_TASK_NAME "console_task"
-#define APP_CONSOLE_PRINTF_TASK_NAME "printf_task"
-#define APP_CONSOLE_SCANF_TASK_NAME "scanf_task"
+#define APP_CONSOLE_UART_TX_TASK_NAME "uart_tx_task"
+#define APP_CONSOLE_UART_RX_TASK_NAME "uart_rx_task"
 #define APP_CONSOLE_DEFAULT_TIMEOUT_MS 1000U
 #define APP_CONSOLE_DEFAULT_DELAY_MS 10U
-#define APP_CONSOLE_PRINTF_PERIOD_MS (APP_CONSOLE_DEFAULT_DELAY_MS*2)
+#define APP_CONSOLE_UART_TX_PERIOD_MS (APP_CONSOLE_DEFAULT_DELAY_MS*2)
 #define APP_CONSOLE_TASK_PRIORITY 16UL
-#define APP_CONSOLE_PRINTF_TASK_PRIORITY APP_CONSOLE_TASK_PRIORITY
-#define APP_CONSOLE_SCANF_TASK_PRIORITY 8UL
+#define APP_CONSOLE_UART_TX_TASK_PRIORITY APP_CONSOLE_TASK_PRIORITY
+#define APP_CONSOLE_UART_RX_TASK_PRIORITY 12UL
 #define APP_CONSOLE_UART_BUFFER_SIZE 128UL
 #define APP_CONSOLE_TASK_STASK_SIZE 128U
+#define APP_CONSOLE_OPTION_STR_BUF_SIZE 8U
+
+typedef struct task_uart_tx_queue_linked_list_s
+{
+    TaskHandle_t task;
+    QueueHandle_t tx_queue;
+    struct task_uart_tx_queue_linked_list_s *next;
+} task_uart_tx_queue_ll_t;
 
 static void console_task(void *arg);
-static void printf_task(void *arg);
-static void scanf_task(void *arg);
+static void uart_tx_task(void *arg);
+static void uart_rx_task(void *arg);
 
 static void uart_tx_complete_cb(UART_HandleTypeDef *huart);
 
 static UART_HandleTypeDef *uart_handle = NULL;
 static QueueHandle_t uart_sema = NULL;
 static TaskHandle_t console_task_handle = NULL;
-static TaskHandle_t printf_task_handle = NULL;
-static TaskHandle_t scanf_task_handle = NULL;
+static TaskHandle_t uart_tx_task_handle = NULL;
+static TaskHandle_t uart_rx_task_handle = NULL;
 static QueueHandle_t rx_queue = NULL;
 static state_machine_t console_fsm =
 {
@@ -38,12 +46,7 @@ static state_machine_t console_fsm =
     .transitions   = (const fsm_transition_t*)app_console_fsm_transitions
 };
 
-struct task_printf_queue_ll_s
-{
-    TaskHandle_t task;
-    QueueHandle_t tx_queue;
-    struct task_printf_queue_ll_s *next;
-} static *task_printf_queue_linked_list = NULL;
+static task_uart_tx_queue_ll_t *task_uart_tx_queue_ll = NULL;
 
 static inline HAL_StatusTypeDef _is_uart_initialized()
 {
@@ -78,14 +81,14 @@ HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle)
         if (xTaskCreate(&console_task, APP_CONSOLE_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE*4, NULL, APP_CONSOLE_TASK_PRIORITY, &console_task_handle) != pdTRUE)
             break;
 
-        if (xTaskCreate(&printf_task, APP_CONSOLE_PRINTF_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_PRINTF_TASK_PRIORITY, &printf_task_handle) != pdTRUE)
+        if (xTaskCreate(&uart_tx_task, APP_CONSOLE_UART_TX_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_UART_TX_TASK_PRIORITY, &uart_tx_task_handle) != pdTRUE)
             break;
 
-        if (xTaskCreate(&scanf_task, APP_CONSOLE_SCANF_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_SCANF_TASK_PRIORITY, &scanf_task_handle) != pdTRUE)
+        if (xTaskCreate(&uart_rx_task, APP_CONSOLE_UART_RX_TASK_NAME, APP_CONSOLE_TASK_STASK_SIZE, NULL, APP_CONSOLE_UART_RX_TASK_PRIORITY, &uart_rx_task_handle) != pdTRUE)
             break;
 
-        (void)setvbuf(stdout, NULL, _IONBF, 0); // needed for printf to work properly
-        (void)setvbuf(stdin, NULL, _IONBF, 0); // needed for scanf to work properly
+        (void)setvbuf(stdout, NULL, _IONBF, 0); // needed for __io_putchar to work properly
+        (void)setvbuf(stdin, NULL, _IONBF, 0); // needed for __io_getchar to work properly
 
         fflush(stdout);
         fflush(stdin);
@@ -105,11 +108,11 @@ HAL_StatusTypeDef app_console_init(UART_HandleTypeDef *handle)
         if (console_task_handle)
             vTaskDelete(console_task_handle);
 
-        if (printf_task_handle)
-            vTaskDelete(printf_task_handle);
+        if (uart_tx_task_handle)
+            vTaskDelete(uart_tx_task_handle);
 
-        if (scanf_task_handle)
-            vTaskDelete(scanf_task_handle);
+        if (uart_rx_task_handle)
+            vTaskDelete(uart_rx_task_handle);
     }
 
     return result;
@@ -121,30 +124,45 @@ static void console_task(void *arg)
 
     while (true)
     {
-        if (_is_uart_initialized() != HAL_OK)
+        do
         {
-            vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
-            continue;
-        }
+            if (_is_uart_initialized() != HAL_OK)
+                break;
 
-        if (console_fsm.current_state == APP_CONSOLE_NO_MENU)
-        {
-            (void)fsm_v2_process_event(&console_fsm, APP_CONSOLE_OPTION_0, NULL);
-            continue;
-        }
+            if (console_fsm.current_state == APP_CONSOLE_NO_MENU)
+            {
+                (void)fsm_v2_process_event(&console_fsm, APP_CONSOLE_OPTION_0, NULL);
+                break;
+            }
 
-        char option;
-        scanf("%c", &option);
+            char buf_s[APP_CONSOLE_OPTION_STR_BUF_SIZE] = {0};
+            if (!fgets(buf_s, sizeof(buf_s), stdin))
+                break;
 
-        if ((option >= '0') && (option <= '9')) // TODO: implement character for breaking some monitor functionality (e.g. CTRL-C)
+            if (strlen(buf_s) != (sizeof(" \n")-1))
+            {
+                printf("Incorrect input format.\n");
+                break;
+            }
+
+            char option = buf_s[0];
+
+            if ((option < '0') || (option > '9')) // TODO: implement character for breaking the monitor functionality (e.g. CTRL-C for breaking acc+gyro monitor)
+            {
+                printf("Incorrect option: %c\n", option);
+                break;
+            }
+
             if (!fsm_v2_process_event(&console_fsm, (fsm_event_t)(option - '0'), NULL))
                 printf("Option %c is unavailable.\n", option);
+        }
+        while (false);
 
         vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_DEFAULT_DELAY_MS));
     }
 }
 
-static void printf_task(void *arg)
+static void uart_tx_task(void *arg)
 {
     UNUSED(arg);
 
@@ -156,7 +174,7 @@ static void printf_task(void *arg)
             continue;
         }
 
-        struct task_printf_queue_ll_s *curr_item = task_printf_queue_linked_list;
+        task_uart_tx_queue_ll_t *curr_item = task_uart_tx_queue_ll;
 
         while (curr_item)
         {
@@ -187,11 +205,11 @@ static void printf_task(void *arg)
             curr_item = curr_item->next;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_PRINTF_PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(APP_CONSOLE_UART_TX_PERIOD_MS));
     }
 }
 
-static void scanf_task(void *arg)
+static void uart_rx_task(void *arg)
 {
     UNUSED(arg);
 
@@ -230,7 +248,7 @@ static void uart_tx_complete_cb(UART_HandleTypeDef *huart)
     UNUSED(huart);
 
     (void)xSemaphoreGiveFromISR(uart_sema, NULL);
-    vTaskNotifyGiveFromISR(printf_task_handle, NULL);
+    vTaskNotifyGiveFromISR(uart_tx_task_handle, NULL);
 }
 
 int __io_putchar(int ch)
@@ -239,7 +257,7 @@ int __io_putchar(int ch)
 
     TaskHandle_t curr_task_handle = xTaskGetCurrentTaskHandle();
 
-    struct task_printf_queue_ll_s **curr_item = &task_printf_queue_linked_list;
+    task_uart_tx_queue_ll_t **curr_item = &task_uart_tx_queue_ll;
 
     while (*curr_item)
     {
@@ -251,7 +269,7 @@ int __io_putchar(int ch)
 
     if (*curr_item == NULL)
     {
-        *curr_item = pvPortMalloc(sizeof(struct task_printf_queue_ll_s));
+        *curr_item = pvPortMalloc(sizeof(task_uart_tx_queue_ll_t));
         if (*curr_item)
         {
             (*curr_item)->task = curr_task_handle;

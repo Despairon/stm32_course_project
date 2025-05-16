@@ -3,7 +3,7 @@
 
 #include <lib/simple_state_machine/include/simple_fsm_v2.h>
 
-typedef enum app_console_menu_e
+typedef enum
 {
     APP_CONSOLE_MAIN_MENU,
     APP_CONSOLE_LED_MENU,
@@ -12,7 +12,7 @@ typedef enum app_console_menu_e
     APP_CONSOLE_MENUS_COUNT
 } app_console_menu_t;
 
-typedef enum app_console_option_e
+typedef enum
 {
     APP_CONSOLE_OPTION_0,
     APP_CONSOLE_OPTION_1,

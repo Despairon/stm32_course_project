@@ -6,7 +6,7 @@
 
 #define MAX_7219_LED_MATRIX_SIZE ((size_t)8)
 
-typedef enum max7219_led_matrix_segment_e
+typedef enum
 {
     MAX7219_LED_MATRIX_NO_SEGMENT = 0,
     MAX7219_LED_MATRIX_SEGMENT_G = 1,
